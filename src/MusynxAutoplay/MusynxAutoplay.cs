@@ -30,6 +30,7 @@ namespace MusynxAutoplay
         internal static ConfigEntry<bool> CfgDevTest;
         internal static ConfigEntry<bool> CfgIgnoreFocus;
         internal static ConfigEntry<int> CfgPort;
+        internal static ConfigEntry<KeyCode> CfgFullscreenKey;
 
         internal static bool Enabled = true;
         static Harmony s_harmony;
@@ -55,6 +56,7 @@ namespace MusynxAutoplay
             CfgDevTest = Config.Bind("Dev", "AutoTest", false, "开发自测：自动进入一首歌并打完");
             CfgIgnoreFocus = Config.Bind("General", "IgnoreFocusPause", true, "切出窗口时不暂停（游戏默认失焦即暂停）");
             CfgPort = Config.Bind("General", "Port", 38091, "本机控制端口（工具端连接用）");
+            CfgFullscreenKey = Config.Bind("General", "FullscreenKey", KeyCode.F11, "全屏/窗口切换热键");
 
             Enabled = CfgEnabled.Value;
 
@@ -83,6 +85,8 @@ namespace MusynxAutoplay
         {
             try
             {
+                if (Input.GetKeyDown(CfgFullscreenKey.Value)) ToggleFullscreen();
+
                 if (Input.GetKeyDown(CfgToggle.Value))
                 {
                     Enabled = !Enabled;
@@ -310,6 +314,29 @@ namespace MusynxAutoplay
 
         internal static MonoBehaviour CurrentPlayer;
         internal static double HitRatio = 1.0;
+
+        internal static string ToggleFullscreen()
+        {
+            try
+            {
+                if (Screen.fullScreen)
+                {
+                    Screen.SetResolution(1280, 720, false);
+                    Log.LogInfo("display -> windowed 1280x720");
+                    return "{\"ok\":true,\"data\":\"windowed\"}";
+                }
+                int w = Display.main.systemWidth;
+                int h = Display.main.systemHeight;
+                Screen.SetResolution(w, h, true);
+                Log.LogInfo("display -> fullscreen " + w + "x" + h);
+                return "{\"ok\":true,\"data\":\"fullscreen\"}";
+            }
+            catch (Exception e)
+            {
+                Log.LogError("fullscreen toggle failed: " + e.Message);
+                return "{\"ok\":false,\"error\":" + Json.Q(e.Message) + "}";
+            }
+        }
 
         internal static void OnPlayerUpdate(MonoBehaviour player)
         {

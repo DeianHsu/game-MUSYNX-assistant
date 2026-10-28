@@ -101,6 +101,8 @@ namespace MusynxAutoplay
                         return RunOnMain(GameBridge.GoSelect);
                     case "songs":
                         return RunOnMain(GameBridge.Songs);
+                    case "fullscreen":
+                        return RunOnMain(AutoplayPlugin.ToggleFullscreen);
                     case "state":
                         return RunOnMain(GameBridge.State);
                     case "play":
