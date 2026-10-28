@@ -57,6 +57,8 @@ AutoTest = false          # 自动选歌跑一首（自测用，别开）
 
 **位置**：`dist\MUSYNX-Tool.exe`，必须和 `dist\payload\`、`dist\BepInEx\` 放在同一层（安装时要复制这两个目录里的文件）。
 
+![工具窗口](docs/tool-window.png)
+
 **用法**：
 
 1. 打开工具，"游戏目录"自动带出上次路径，可用「浏览…」改。
