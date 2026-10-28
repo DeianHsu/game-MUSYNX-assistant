@@ -39,6 +39,12 @@ namespace MusynxAutoplay
         }
 
         static string S(object o, string name) { return Prop(o, name) as string; }
+        static bool Bool(object o, string name)
+        {
+            object v = Prop(o, name);
+            return v is bool && (bool)v;
+        }
+
         static int I(object o, string name)
         {
             object v = Prop(o, name);
@@ -106,9 +112,18 @@ namespace MusynxAutoplay
 
         static string SceneOf(SongInfoCore c)
         {
-            string s = S(c, "playingSceneName");
-            if (string.IsNullOrEmpty(s) || !Application.CanStreamedLevelBeLoaded(s)) return "UIB_PlayingScene";
-            return s;
+            string scene = null;
+            // 优先用游戏自己的场景解析（会考虑玩家当前主题/已拥有内容）
+            try
+            {
+                Type adv = T("AdvSettingScript");
+                MethodInfo gm = adv == null ? null : adv.GetMethod("GetPlaySceneName", Any);
+                if (gm != null) scene = gm.Invoke(null, new object[] { c }) as string;
+            }
+            catch (Exception) { }
+            if (string.IsNullOrEmpty(scene)) scene = S(c, "playingSceneName");
+            if (string.IsNullOrEmpty(scene) || !Application.CanStreamedLevelBeLoaded(scene)) scene = "UIB_PlayingScene";
+            return scene;
         }
 
         public static string Songs()
@@ -146,6 +161,10 @@ namespace MusynxAutoplay
                           .Append("\"level\":").Append(I(core, "level")).Append(',')
                           .Append("\"bms\":").Append(Json.Q(bms)).Append(',')
                           .Append("\"sync\":").Append(I(core, "SyncNumber")).Append(',')
+                          .Append("\"needDownload\":").Append(Bool(core, "NeedDownloadAssetBundle") ? "true" : "false").Append(',')
+                          .Append("\"needUpdate\":").Append(Bool(core, "NeedUpdateAssetBundle") ? "true" : "false").Append(',')
+                          .Append("\"useBundle\":").Append(Bool(core, "UseAssetBundle") ? "true" : "false").Append(',')
+                          .Append("\"productId\":").Append(Json.Q(S(core, "ProductId") ?? "")).Append(',')
                           .Append("\"scene\":").Append(Json.Q(SceneOf(core)))
                           .Append('}');
                     }
