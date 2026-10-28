@@ -393,11 +393,8 @@ namespace MusynxTool
             {
                 var psi = new ProcessStartInfo(exe);
                 psi.WorkingDirectory = txtGame.Text.Trim();
-                if (chkFull.Checked)
-                {
-                    Rectangle b = Screen.PrimaryScreen.Bounds;
-                    psi.Arguments = "-screen-fullscreen 1 -screen-width " + b.Width + " -screen-height " + b.Height;
-                }
+                // 只传全屏开关，分辨率交给 Unity 用桌面原生值，避免 DPI 缩放后传错分辨率导致黑屏
+                if (chkFull.Checked) psi.Arguments = "-screen-fullscreen 1";
                 Process.Start(psi);
                 Log("已启动游戏，等待进入选歌…");
             }
