@@ -218,6 +218,41 @@ namespace MusynxAutoplay
 
         // ---------- 状态 ----------
 
+        static string DebugInfo(MonoBehaviour player)
+        {
+            try
+            {
+                Type um = T("UserMemory");
+                PropertyInfo bn = um == null ? null : um.GetProperty("ButtonNumber", Any);
+                object bnVal = bn == null ? null : bn.GetValue(null, null);
+                int lanes = 0;
+                var trackCounts = new StringBuilder();
+                if (player != null)
+                {
+                    PlayerAccessor pa = PlayerAccessor.For(player.GetType());
+                    IList[] tr = pa == null ? null : pa.NoteByTrack.GetValue(player) as IList[];
+                    if (tr != null)
+                    {
+                        lanes = tr.Length;
+                        for (int i = 0; i < tr.Length; i++) trackCounts.Append(tr[i] == null ? 0 : tr[i].Count).Append(',');
+                    }
+                }
+                int trackX = 0;
+                if (player != null)
+                {
+                    object tx = Prop(player, "TrackX");
+                    var arr = tx as Array;
+                    if (arr != null) trackX = arr.Length;
+                }
+                return ",\"buttonNumber\":" + (bnVal == null ? "null" : bnVal.ToString()) +
+                       ",\"trackX\":" + trackX +
+                       ",\"playerType\":" + Json.Q(player == null ? "" : player.GetType().Name) +
+                       ",\"lanes\":" + lanes +
+                       ",\"trackNotes\":" + Json.Q(trackCounts.ToString());
+            }
+            catch (Exception) { return ""; }
+        }
+
         public static string State()
         {
             string scene = Scene();
@@ -237,11 +272,12 @@ namespace MusynxAutoplay
                     if (total > 0) progress = Math.Max(0, Math.Min(1, ticks / (double)total));
                 }
             }
+            string extra = DebugInfo(player);
             return "{\"ok\":true,\"data\":{\"scene\":" + Json.Q(scene) +
                    ",\"playing\":" + (playing ? "true" : "false") +
                    ",\"progress\":" + Json.Num(progress) +
                    ",\"title\":" + Json.Q(CurrentTitle ?? "") +
-                   ",\"result\":" + (LastResultFresh ? LastResultJson : "null") + "}}";
+                   ",\"result\":" + (LastResultFresh ? LastResultJson : "null") + extra + "}}";
         }
 
         public static void CaptureResult()
