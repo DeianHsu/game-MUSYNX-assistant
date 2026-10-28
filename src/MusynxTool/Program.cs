@@ -201,6 +201,7 @@ namespace MusynxTool
         readonly ComboBox cbKeys = new ComboBox();
         readonly ComboBox cbDiff = new ComboBox();
         readonly TextBox txtSearch = new TextBox();
+        readonly CheckBox chkFull = new CheckBox();
         readonly ProgressBar bar = new ProgressBar();
         readonly Label lblState = new Label();
         readonly TextBox txtLog = new TextBox();
@@ -230,6 +231,10 @@ namespace MusynxTool
             btnInstall.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             var btnLaunch = new Button { Text = "启动游戏", Location = new Point(796, 11), Size = new Size(90, 28) };
             btnLaunch.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            chkFull.Text = "全屏";
+            chkFull.SetBounds(896, 14, 70, 24);
+            chkFull.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            chkFull.Checked = true;
 
             lblConn.Text = "○ 未连接";
             lblConn.SetBounds(12, 46, 400, 20);
@@ -284,7 +289,7 @@ namespace MusynxTool
             txtLog.BackColor = Color.White;
 
             Controls.AddRange(new Control[] { lblGame, txtGame, btnBrowse, btnInstall, btnLaunch, lblConn,
-                btnPrepare, btnRefresh, btnPlay, lblKeys, cbKeys, lblDiff, cbDiff, txtSearch, bar, lblState, lv, txtLog });
+                btnPrepare, btnRefresh, btnPlay, lblKeys, cbKeys, lblDiff, cbDiff, txtSearch, bar, lblState, lv, txtLog, chkFull });
 
             btnBrowse.Click += delegate { Browse(); };
             btnInstall.Click += delegate { Install(); };
@@ -339,7 +344,10 @@ namespace MusynxTool
                 {
                     string[] lines = File.ReadAllLines(SettingsPath());
                     foreach (string line in lines)
+                    {
                         if (line.StartsWith("game=")) txtGame.Text = line.Substring(5);
+                        if (line.StartsWith("fullscreen=")) chkFull.Checked = line.Substring(11) == "1";
+                    }
                 }
             }
             catch { }
@@ -349,7 +357,7 @@ namespace MusynxTool
 
         void SaveSettings()
         {
-            try { File.WriteAllText(SettingsPath(), "game=" + txtGame.Text); } catch { }
+            try { File.WriteAllText(SettingsPath(), "game=" + txtGame.Text + Environment.NewLine + "fullscreen=" + (chkFull.Checked ? "1" : "0")); } catch { }
         }
 
         void Browse()
@@ -383,7 +391,14 @@ namespace MusynxTool
             if (!File.Exists(exe)) { Log("找不到 MUSYNX.exe"); return; }
             try
             {
-                Process.Start(new ProcessStartInfo(exe) { WorkingDirectory = txtGame.Text.Trim() });
+                var psi = new ProcessStartInfo(exe);
+                psi.WorkingDirectory = txtGame.Text.Trim();
+                if (chkFull.Checked)
+                {
+                    Rectangle b = Screen.PrimaryScreen.Bounds;
+                    psi.Arguments = "-screen-fullscreen 1 -screen-width " + b.Width + " -screen-height " + b.Height;
+                }
+                Process.Start(psi);
                 Log("已启动游戏，等待进入选歌…");
             }
             catch (Exception e) { Log("启动失败：" + e.Message); }
