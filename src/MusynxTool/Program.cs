@@ -199,6 +199,8 @@ namespace MusynxTool
         readonly Label lblConn = new Label();
         readonly ListView lv = new ListView();
         readonly ComboBox cbKeys = new ComboBox();
+        readonly ComboBox cbDiff = new ComboBox();
+        readonly TextBox txtSearch = new TextBox();
         readonly ProgressBar bar = new ProgressBar();
         readonly Label lblState = new Label();
         readonly TextBox txtLog = new TextBox();
@@ -207,11 +209,15 @@ namespace MusynxTool
         readonly List<Song> songs = new List<Song>();
         string lastResult = "";
         bool autoLoaded;
+        bool needRefresh;
+        string lastScene = "";
+        int sortCol = -1;
+        bool sortAsc = true;
 
         public MainForm()
         {
             Text = "MUSYNX 自动打歌工具";
-            Size = new Size(1000, 680);
+            Size = new Size(1080, 700);
             StartPosition = FormStartPosition.CenterScreen;
             Font = new Font("Microsoft YaHei UI", 9f);
 
@@ -229,38 +235,48 @@ namespace MusynxTool
             lblConn.SetBounds(12, 46, 400, 20);
             lblConn.ForeColor = Color.Gray;
 
-            var btnPrepare = new Button { Text = "进入选歌", Location = new Point(12, 72), Size = new Size(96, 30) };
-            var btnRefresh = new Button { Text = "刷新列表", Location = new Point(116, 72), Size = new Size(96, 30) };
+            var btnPrepare = new Button { Text = "进入选歌", Location = new Point(12, 72), Size = new Size(90, 30) };
+            var btnRefresh = new Button { Text = "刷新列表", Location = new Point(108, 72), Size = new Size(90, 30) };
             btnPlay.Text = "开始打歌";
-            btnPlay.SetBounds(220, 72, 110, 30);
+            btnPlay.SetBounds(204, 72, 100, 30);
             btnPlay.Enabled = false;
             btnPlay.Font = new Font(Font, FontStyle.Bold);
 
-            var lblKeys = new Label { Text = "键数", Location = new Point(346, 78), AutoSize = true };
-            cbKeys.SetBounds(386, 74, 90, 26);
+            txtSearch.SetBounds(312, 75, 170, 26);
+            txtSearch.ForeColor = Color.Gray;
+            txtSearch.Text = "搜索歌名";
+
+            var lblKeys = new Label { Text = "键数", Location = new Point(492, 78), AutoSize = true };
+            cbKeys.SetBounds(530, 74, 64, 26);
             cbKeys.DropDownStyle = ComboBoxStyle.DropDownList;
             cbKeys.Items.AddRange(new object[] { "全部", "4K", "6K" });
             cbKeys.SelectedIndex = 0;
 
-            bar.SetBounds(496, 76, 300, 22);
+            var lblDiff = new Label { Text = "难度", Location = new Point(602, 78), AutoSize = true };
+            cbDiff.SetBounds(640, 74, 76, 26);
+            cbDiff.DropDownStyle = ComboBoxStyle.DropDownList;
+            cbDiff.Items.AddRange(new object[] { "全部", "简单", "困难", "IN" });
+            cbDiff.SelectedIndex = 0;
+
+            bar.SetBounds(726, 76, 180, 22);
             bar.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            lblState.SetBounds(804, 78, 180, 20);
+            lblState.SetBounds(912, 78, 150, 20);
             lblState.Text = "就绪";
             lblState.Anchor = AnchorStyles.Top | AnchorStyles.Right;
 
-            lv.SetBounds(12, 114, 960, 380);
+            lv.SetBounds(12, 114, 1056, 424);
             lv.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
             lv.View = View.Details;
             lv.FullRowSelect = true;
             lv.MultiSelect = false;
             lv.HideSelection = false;
-            lv.Columns.Add("歌曲", 300);
-            lv.Columns.Add("难度", 70);
-            lv.Columns.Add("键数", 60);
-            lv.Columns.Add("等级", 60);
-            lv.Columns.Add("同步率", 90);
+            lv.Columns.Add("歌曲", 340);
+            lv.Columns.Add("难度", 90);
+            lv.Columns.Add("键数", 80);
+            lv.Columns.Add("等级", 80);
+            lv.Columns.Add("同步率", 110);
 
-            txtLog.SetBounds(12, 504, 960, 110);
+            txtLog.SetBounds(12, 550, 1056, 92);
             txtLog.Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
             txtLog.Multiline = true;
             txtLog.ReadOnly = true;
@@ -268,7 +284,7 @@ namespace MusynxTool
             txtLog.BackColor = Color.White;
 
             Controls.AddRange(new Control[] { lblGame, txtGame, btnBrowse, btnInstall, btnLaunch, lblConn,
-                btnPrepare, btnRefresh, btnPlay, lblKeys, cbKeys, bar, lblState, lv, txtLog });
+                btnPrepare, btnRefresh, btnPlay, lblKeys, cbKeys, lblDiff, cbDiff, txtSearch, bar, lblState, lv, txtLog });
 
             btnBrowse.Click += delegate { Browse(); };
             btnInstall.Click += delegate { Install(); };
@@ -277,6 +293,25 @@ namespace MusynxTool
             btnRefresh.Click += delegate { RefreshSongs(); };
             btnPlay.Click += delegate { Play(); };
             cbKeys.SelectedIndexChanged += delegate { FillList(); };
+            cbDiff.SelectedIndexChanged += delegate { FillList(); };
+            txtSearch.TextChanged += delegate
+            {
+                if (txtSearch.Text != "搜索歌名") FillList();
+            };
+            txtSearch.Enter += delegate
+            {
+                if (txtSearch.Text == "搜索歌名") { txtSearch.Text = ""; txtSearch.ForeColor = Color.Black; }
+            };
+            txtSearch.Leave += delegate
+            {
+                if (txtSearch.Text.Trim().Length == 0) { txtSearch.Text = "搜索歌名"; txtSearch.ForeColor = Color.Gray; }
+            };
+            lv.ColumnClick += delegate(object sender, ColumnClickEventArgs e)
+            {
+                if (sortCol == e.Column) sortAsc = !sortAsc;
+                else { sortCol = e.Column; sortAsc = true; }
+                FillList();
+            };
             lv.DoubleClick += delegate { if (btnPlay.Enabled) Play(); };
             Load += delegate { LoadSettings(); };
             FormClosing += delegate { SaveSettings(); };
@@ -427,14 +462,57 @@ namespace MusynxTool
             Log("已加载 " + songs.Count + " 张谱面");
         }
 
+        static int HardRank(string hard)
+        {
+            if (hard == "easy") return 0;
+            if (hard == "hard") return 1;
+            if (hard == "in") return 2;
+            return 3;
+        }
+
         void FillList()
         {
-            int filter = cbKeys.SelectedIndex == 1 ? 4 : (cbKeys.SelectedIndex == 2 ? 6 : 0);
-            lv.BeginUpdate();
-            lv.Items.Clear();
+            int keyFilter = cbKeys.SelectedIndex == 1 ? 4 : (cbKeys.SelectedIndex == 2 ? 6 : 0);
+            int diffFilter = cbDiff.SelectedIndex;
+            string q = txtSearch.Text == "搜索歌名" ? "" : txtSearch.Text.Trim();
+
+            var view = new List<Song>();
             foreach (Song s in songs)
             {
-                if (filter != 0 && s.Keys != filter) continue;
+                if (keyFilter != 0 && s.Keys != keyFilter) continue;
+                if (diffFilter == 1 && s.Hard != "easy") continue;
+                if (diffFilter == 2 && s.Hard != "hard") continue;
+                if (diffFilter == 3 && s.Hard != "in") continue;
+                if (q.Length > 0 && s.Name.IndexOf(q, StringComparison.OrdinalIgnoreCase) < 0) continue;
+                view.Add(s);
+            }
+
+            if (sortCol >= 0)
+            {
+                view.Sort(delegate (Song a, Song b)
+                {
+                    int cmp = 0;
+                    switch (sortCol)
+                    {
+                        case 0: cmp = string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase); break;
+                        case 1: cmp = HardRank(a.Hard).CompareTo(HardRank(b.Hard)); break;
+                        case 2: cmp = a.Keys.CompareTo(b.Keys); break;
+                        case 3: cmp = a.Level.CompareTo(b.Level); break;
+                        case 4: cmp = a.Sync.CompareTo(b.Sync); break;
+                    }
+                    if (cmp == 0) cmp = string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase);
+                    return sortAsc ? cmp : -cmp;
+                });
+            }
+
+            string[] headers = { "歌曲", "难度", "键数", "等级", "同步率" };
+            for (int i = 0; i < headers.Length; i++)
+                lv.Columns[i].Text = (i == sortCol ? (sortAsc ? "▲ " : "▼ ") : "") + headers[i];
+
+            lv.BeginUpdate();
+            lv.Items.Clear();
+            foreach (Song s in view)
+            {
                 var item = new ListViewItem(s.Name) { Tag = s };
                 item.SubItems.Add(HardName(s.Hard));
                 item.SubItems.Add(s.Keys + "K");
@@ -506,6 +584,16 @@ namespace MusynxTool
             bool playing = Json.B(d["playing"]);
             double progress = Convert.ToDouble(d["progress"], CultureInfo.InvariantCulture);
 
+            if (scene != lastScene)
+            {
+                if (scene != null && scene.IndexOf("SelectSong", StringComparison.Ordinal) >= 0 && needRefresh)
+                {
+                    needRefresh = false;
+                    RefreshSongs();
+                }
+                lastScene = scene;
+            }
+
             if (!autoLoaded && scene != null && scene.IndexOf("SelectSong", StringComparison.Ordinal) >= 0 && songs.Count == 0)
             {
                 autoLoaded = true;
@@ -537,7 +625,12 @@ namespace MusynxTool
                         "%  EX " + Json.I(r["ex"]) + " / MISS " + Json.I(r["miss"]) + " / COMBO " + Json.I(r["combo"]));
                     bar.Value = 0;
                     btnPlay.Enabled = true;
-                    RefreshSongs();
+                    needRefresh = true;
+                    if (scene != null && scene.IndexOf("SelectSong", StringComparison.Ordinal) >= 0)
+                    {
+                        needRefresh = false;
+                        RefreshSongs();
+                    }
                 }
             }
         }
