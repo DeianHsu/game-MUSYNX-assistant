@@ -201,7 +201,6 @@ namespace MusynxTool
         readonly ComboBox cbKeys = new ComboBox();
         readonly ComboBox cbDiff = new ComboBox();
         readonly TextBox txtSearch = new TextBox();
-        readonly CheckBox chkFull = new CheckBox();
         readonly ProgressBar bar = new ProgressBar();
         readonly Label lblState = new Label();
         readonly TextBox txtLog = new TextBox();
@@ -223,18 +222,12 @@ namespace MusynxTool
             Font = new Font("Microsoft YaHei UI", 9f);
 
             var lblGame = new Label { Text = "游戏目录", Location = new Point(12, 16), AutoSize = true };
-            txtGame.SetBounds(80, 12, 520, 26);
+            txtGame.SetBounds(80, 12, 750, 26);
             txtGame.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            var btnBrowse = new Button { Text = "浏览…", Location = new Point(610, 11), Size = new Size(80, 28) };
+            var btnBrowse = new Button { Text = "浏览…", Location = new Point(840, 11), Size = new Size(80, 28) };
             btnBrowse.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            var btnInstall = new Button { Text = "安装/修复", Location = new Point(698, 11), Size = new Size(90, 28) };
+            var btnInstall = new Button { Text = "安装/修复", Location = new Point(928, 11), Size = new Size(118, 28) };
             btnInstall.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            var btnLaunch = new Button { Text = "启动游戏", Location = new Point(796, 11), Size = new Size(90, 28) };
-            btnLaunch.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            chkFull.Text = "全屏";
-            chkFull.SetBounds(896, 14, 70, 24);
-            chkFull.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            chkFull.Checked = true;
 
             lblConn.Text = "○ 未连接";
             lblConn.SetBounds(12, 46, 400, 20);
@@ -288,12 +281,11 @@ namespace MusynxTool
             txtLog.ScrollBars = ScrollBars.Vertical;
             txtLog.BackColor = Color.White;
 
-            Controls.AddRange(new Control[] { lblGame, txtGame, btnBrowse, btnInstall, btnLaunch, lblConn,
-                btnPrepare, btnRefresh, btnPlay, lblKeys, cbKeys, lblDiff, cbDiff, txtSearch, bar, lblState, lv, txtLog, chkFull });
+            Controls.AddRange(new Control[] { lblGame, txtGame, btnBrowse, btnInstall, lblConn,
+                btnPrepare, btnRefresh, btnPlay, lblKeys, cbKeys, lblDiff, cbDiff, txtSearch, bar, lblState, lv, txtLog });
 
             btnBrowse.Click += delegate { Browse(); };
             btnInstall.Click += delegate { Install(); };
-            btnLaunch.Click += delegate { Launch(); };
             btnPrepare.Click += delegate { Prepare(); };
             btnRefresh.Click += delegate { RefreshSongs(); };
             btnPlay.Click += delegate { Play(); };
@@ -346,7 +338,6 @@ namespace MusynxTool
                     foreach (string line in lines)
                     {
                         if (line.StartsWith("game=")) txtGame.Text = line.Substring(5);
-                        if (line.StartsWith("fullscreen=")) chkFull.Checked = line.Substring(11) == "1";
                     }
                 }
             }
@@ -357,7 +348,7 @@ namespace MusynxTool
 
         void SaveSettings()
         {
-            try { File.WriteAllText(SettingsPath(), "game=" + txtGame.Text + Environment.NewLine + "fullscreen=" + (chkFull.Checked ? "1" : "0")); } catch { }
+            try { File.WriteAllText(SettingsPath(), "game=" + txtGame.Text); } catch { }
         }
 
         void Browse()
@@ -383,22 +374,6 @@ namespace MusynxTool
                 Log("安装失败：" + e.Message);
                 MessageBox.Show(this, e.Message, "安装失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
-        }
-
-        void Launch()
-        {
-            string exe = Path.Combine(txtGame.Text.Trim(), "MUSYNX.exe");
-            if (!File.Exists(exe)) { Log("找不到 MUSYNX.exe"); return; }
-            try
-            {
-                var psi = new ProcessStartInfo(exe);
-                psi.WorkingDirectory = txtGame.Text.Trim();
-                // 只传全屏开关，分辨率交给 Unity 用桌面原生值，避免 DPI 缩放后传错分辨率导致黑屏
-                if (chkFull.Checked) psi.Arguments = "-screen-fullscreen 1";
-                Process.Start(psi);
-                Log("已启动游戏，等待进入选歌…");
-            }
-            catch (Exception e) { Log("启动失败：" + e.Message); }
         }
 
         bool Connected()
