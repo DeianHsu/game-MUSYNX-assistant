@@ -546,26 +546,10 @@ namespace MusynxTool
     static class Program
     {
         [STAThread]
-        static void Main(string[] args)
+        static void Main()
         {
-            string dir = AppDomain.CurrentDomain.BaseDirectory;
-            if (args.Length > 0 && args[0] == "--selftest")
-            {
-                try
-                {
-                    File.WriteAllText(Path.Combine(dir, "selftest.log"), "start");
-                    var f = new MainForm();
-                    File.WriteAllText(Path.Combine(dir, "selftest.log"), "constructed " + f.Text);
-                }
-                catch (Exception e)
-                {
-                    File.WriteAllText(Path.Combine(dir, "selftest.log"), e.ToString());
-                }
-                return;
-            }
             try
             {
-                File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "tool-start.log"), DateTime.Now.ToString("o"));
                 Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
                 Application.ThreadException += delegate (object o, System.Threading.ThreadExceptionEventArgs e)
                 {
