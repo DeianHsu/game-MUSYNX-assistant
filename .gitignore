@@ -18,3 +18,7 @@ desktop.ini
 
 # 被杀软锁定/隔离的旧副本
 dist/MusynxTool.exe
+
+# 工具运行时文件
+dist/settings.ini
+dist/*.log
