@@ -29,6 +29,7 @@ namespace MusynxAutoplay
         internal static ConfigEntry<bool> CfgVerbose;
         internal static ConfigEntry<bool> CfgDevTest;
         internal static ConfigEntry<bool> CfgIgnoreFocus;
+        internal static ConfigEntry<int> CfgPort;
 
         internal static bool Enabled = true;
         static Harmony s_harmony;
@@ -53,6 +54,7 @@ namespace MusynxAutoplay
             CfgVerbose = Config.Bind("General", "Verbose", false, "每次命中输出日志");
             CfgDevTest = Config.Bind("Dev", "AutoTest", false, "开发自测：自动进入一首歌并打完");
             CfgIgnoreFocus = Config.Bind("General", "IgnoreFocusPause", true, "切出窗口时不暂停（游戏默认失焦即暂停）");
+            CfgPort = Config.Bind("General", "Port", 38091, "本机控制端口（工具端连接用）");
 
             Enabled = CfgEnabled.Value;
 
@@ -60,6 +62,7 @@ namespace MusynxAutoplay
                 .Where(t => t.Name.EndsWith("_SongPlayer") && typeof(MonoBehaviour).IsAssignableFrom(t))
                 .ToArray();
             Log.LogInfo("MUSYNX Autoplay: found " + PlayerTypes.Length + " song player types");
+            CommandServer.Start(CfgPort.Value);
 
             try
             {
@@ -86,12 +89,15 @@ namespace MusynxAutoplay
                     Log.LogInfo("Autoplay " + (Enabled ? "ON" : "OFF"));
                 }
 
+                CommandServer.Pump();
+
                 string scene = SceneManager.GetActiveScene().name;
                 if (scene != s_lastScene)
                 {
                     s_lastScene = scene;
                     s_summaryLogged = false;
                     Log.LogInfo("scene -> " + scene);
+                    if (scene.IndexOf("Settlement", StringComparison.Ordinal) >= 0) GameBridge.CaptureResult();
                 }
                 if (CfgDevTest.Value)
                 {
@@ -303,6 +309,7 @@ namespace MusynxAutoplay
         }
 
         internal static MonoBehaviour CurrentPlayer;
+        internal static double HitRatio = 1.0;
 
         internal static void OnPlayerUpdate(MonoBehaviour player)
         {
@@ -358,6 +365,7 @@ namespace MusynxAutoplay
                 long delta = note.InsertTime - now;
                 if (delta > look) continue;
                 if (delta < -3000000) { knockIndex[t] = scan + 1; continue; }
+                if (HitRatio < 0.999 && UnityEngine.Random.value > HitRatio) { knockIndex[t] = scan + 1; continue; }
 
                 if (perfect)
                 {

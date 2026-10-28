@@ -15,3 +15,6 @@ dist/BepInEx/config/*.cfg
 # Windows 杂项
 Thumbs.db
 desktop.ini
+
+# 被杀软锁定/隔离的旧副本
+dist/MusynxTool.exe
