@@ -22,3 +22,6 @@ dist/MusynxTool.exe
 # 工具运行时文件
 dist/settings.ini
 dist/*.log
+
+# release 产物
+dist/*.zip
