@@ -1,0 +1,17 @@
+# 运行期临时文件（游戏程序集转储、截图、参考仓库等）
+.tmp/
+
+# 构建中间产物
+tools/ildump/bin/
+bin/
+obj/
+
+# 游戏原始文件备份（版权归游戏方，不入库）
+dist/backup/
+
+# BepInEx 运行时生成的配置
+dist/BepInEx/config/*.cfg
+
+# Windows 杂项
+Thumbs.db
+desktop.ini
