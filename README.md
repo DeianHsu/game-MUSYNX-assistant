@@ -12,12 +12,14 @@
 
 ## 安装
 
-1. 下载 Release 里的 `MUSYNX-Tool.zip`，解压到任意目录（路径里不要有中文更稳）
-2. 打开 `MUSYNX-Tool.exe`
+1. 下载 Release 里的 **`MUSYNX-Tool.exe`**（单文件，约 1.4 MB，不用解压、不用安装）
+2. 双击打开
 3. 「游戏目录」选到 `...\steamapps\common\MUSYNX`（里面要有 `MUSYNX.exe`）
 4. 点「安装/修复」
 
 安装会把加载器和插件写进游戏目录，并关掉启动时那个分辨率选择窗口。原始文件会备份在 `BepInEx\MusynxAutoplayBackup\`。
+
+要还原就点旁边的「卸载」，它会恢复备份并删掉写进去的文件。
 
 ## 使用
 
@@ -55,14 +57,14 @@
 
 ## 卸载
 
-运行工具目录里的 `uninstall.ps1`，它会移除插件、恢复 `globalgamemanagers`、删掉加载器。
+点工具里的「卸载」按钮，会恢复 `globalgamemanagers` 备份并删除加载器和插件。
 
 手动卸载也可以：删除游戏目录下的 `BepInEx`、`winhttp.dll`、`doorstop_config.ini`、`.doorstop_version`，再把 `BepInEx\MusynxAutoplayBackup\globalgamemanagers.orig` 覆盖回 `MUSYNX_Data\globalgamemanagers`。
 
 ## 常见问题
 
 **双击 exe 弹「无法验证发布者」**
-用同目录的 `启动工具.cmd` 启动，它走的是另一条启动路径，不经过这个检查。
+右键 exe → 属性 → 勾「解除锁定」→ 确定；或者直接点「仍要运行」。工具没有数字签名，Windows 对刚下载的 exe 会提示一次。
 
 **全屏黑屏**
 不要用启动参数强制全屏。正常窗口模式进游戏，进去后按 **F11** 切换。

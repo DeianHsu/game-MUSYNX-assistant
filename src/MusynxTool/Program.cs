@@ -155,39 +155,96 @@ namespace MusynxTool
 
     static class Installer
     {
+        const string Prefix = "res.";
+
+        static readonly string[] CoreDlls = {
+            "BepInEx.dll", "BepInEx.Preloader.dll", "BepInEx.Harmony.dll",
+            "0Harmony.dll", "0Harmony20.dll", "HarmonyXInterop.dll",
+            "Mono.Cecil.dll", "Mono.Cecil.Mdb.dll", "Mono.Cecil.Pdb.dll", "Mono.Cecil.Rocks.dll",
+            "MonoMod.RuntimeDetour.dll", "MonoMod.Utils.dll"
+        };
+
+        static byte[] Res(string name)
+        {
+            using (Stream s = System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream(Prefix + name))
+            {
+                if (s == null) throw new Exception("缺少内置资源：" + name);
+                using (var ms = new MemoryStream())
+                {
+                    s.CopyTo(ms);
+                    return ms.ToArray();
+                }
+            }
+        }
+
+        static void WriteRes(string name, string path)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path));
+            File.WriteAllBytes(path, Res(name));
+        }
+
+        static void TryDelete(string path)
+        {
+            try { if (File.Exists(path)) File.Delete(path); } catch (Exception) { }
+        }
+
+        public static string Remove(string gameDir)
+        {
+            string backup = Path.Combine(gameDir, "BepInEx", "MusynxAutoplayBackup", "globalgamemanagers.orig");
+            string ggm = Path.Combine(gameDir, "MUSYNX_Data", "globalgamemanagers");
+            if (File.Exists(backup) && File.Exists(ggm))
+            {
+                try { File.Copy(backup, ggm, true); } catch (Exception) { }
+            }
+            try
+            {
+                string pluginDir = Path.Combine(gameDir, "BepInEx", "plugins", "MusynxAutoplay");
+                if (Directory.Exists(pluginDir)) Directory.Delete(pluginDir, true);
+            }
+            catch (Exception) { }
+            TryDelete(Path.Combine(gameDir, "winhttp.dll"));
+            TryDelete(Path.Combine(gameDir, "doorstop_config.ini"));
+            TryDelete(Path.Combine(gameDir, ".doorstop_version"));
+            foreach (string dll in CoreDlls) TryDelete(Path.Combine(gameDir, "BepInEx", "core", dll));
+            return "已卸载";
+        }
+
         public static string Ensure(string gameDir)
         {
             if (!File.Exists(Path.Combine(gameDir, "MUSYNX.exe"))) return "不是有效的 MUSYNX 目录";
-            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-            string payload = Path.Combine(baseDir, "payload");
-            if (!Directory.Exists(payload)) return "缺少 payload 目录";
 
-            File.Copy(Path.Combine(payload, "winhttp.dll"), Path.Combine(gameDir, "winhttp.dll"), true);
-            File.Copy(Path.Combine(payload, "doorstop_config.ini"), Path.Combine(gameDir, "doorstop_config.ini"), true);
-            File.Copy(Path.Combine(payload, ".doorstop_version"), Path.Combine(gameDir, ".doorstop_version"), true);
+            WriteRes("winhttp.dll", Path.Combine(gameDir, "winhttp.dll"));
+            WriteRes("doorstop_config.ini", Path.Combine(gameDir, "doorstop_config.ini"));
+            WriteRes("_doorstop_version", Path.Combine(gameDir, ".doorstop_version"));
 
-            string coreDst = Path.Combine(gameDir, "BepInEx", "core");
-            Directory.CreateDirectory(coreDst);
-            foreach (string f in Directory.GetFiles(Path.Combine(payload, "BepInEx", "core")))
-                File.Copy(f, Path.Combine(coreDst, Path.GetFileName(f)), true);
+            string coreDir = Path.Combine(gameDir, "BepInEx", "core");
+            foreach (string dll in CoreDlls)
+                WriteRes("BepInEx.core." + dll, Path.Combine(coreDir, dll));
 
-            string pluginDst = Path.Combine(gameDir, "BepInEx", "plugins", "MusynxAutoplay");
-            Directory.CreateDirectory(pluginDst);
-            File.Copy(Path.Combine(baseDir, "BepInEx", "plugins", "MusynxAutoplay", "MusynxAutoplay.dll"),
-                      Path.Combine(pluginDst, "MusynxAutoplay.dll"), true);
+            string pluginDir = Path.Combine(gameDir, "BepInEx", "plugins", "MusynxAutoplay");
+            WriteRes("plugin.MusynxAutoplay.dll", Path.Combine(pluginDir, "MusynxAutoplay.dll"));
+
+            try
+            {
+                WriteRes("BepInEx-LICENSE.txt", Path.Combine(gameDir, "BepInEx", "BepInEx-LICENSE.txt"));
+            }
+            catch (Exception) { }
 
             string ggm = Path.Combine(gameDir, "MUSYNX_Data", "globalgamemanagers");
-            byte[] bytes = File.ReadAllBytes(ggm);
-            const int off = 4416;
-            if (bytes.Length > off && bytes[off] == 1)
+            if (File.Exists(ggm))
             {
-                string backupDir = Path.Combine(gameDir, "BepInEx", "MusynxAutoplayBackup");
-                Directory.CreateDirectory(backupDir);
-                string backup = Path.Combine(backupDir, "globalgamemanagers.orig");
-                if (!File.Exists(backup)) File.Copy(ggm, backup, true);
-                bytes[off] = 0;
-                File.WriteAllBytes(ggm, bytes);
-                return "安装完成（已关闭启动对话框）";
+                byte[] bytes = File.ReadAllBytes(ggm);
+                const int off = 4416;
+                if (bytes.Length > off && bytes[off] == 1)
+                {
+                    string backupDir = Path.Combine(gameDir, "BepInEx", "MusynxAutoplayBackup");
+                    Directory.CreateDirectory(backupDir);
+                    string backup = Path.Combine(backupDir, "globalgamemanagers.orig");
+                    if (!File.Exists(backup)) File.Copy(ggm, backup, true);
+                    bytes[off] = 0;
+                    File.WriteAllBytes(ggm, bytes);
+                    return "安装完成（已关闭启动对话框）";
+                }
             }
             return "安装完成";
         }
@@ -222,12 +279,14 @@ namespace MusynxTool
             Font = new Font("Microsoft YaHei UI", 9f);
 
             var lblGame = new Label { Text = "游戏目录", Location = new Point(12, 16), AutoSize = true };
-            txtGame.SetBounds(80, 12, 750, 26);
+            txtGame.SetBounds(80, 12, 620, 26);
             txtGame.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            var btnBrowse = new Button { Text = "浏览…", Location = new Point(840, 11), Size = new Size(80, 28) };
+            var btnBrowse = new Button { Text = "浏览…", Location = new Point(708, 11), Size = new Size(80, 28) };
             btnBrowse.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            var btnInstall = new Button { Text = "安装/修复", Location = new Point(928, 11), Size = new Size(118, 28) };
+            var btnInstall = new Button { Text = "安装/修复", Location = new Point(796, 11), Size = new Size(118, 28) };
             btnInstall.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            var btnRemove = new Button { Text = "卸载", Location = new Point(922, 11), Size = new Size(80, 28) };
+            btnRemove.Anchor = AnchorStyles.Top | AnchorStyles.Right;
 
             lblConn.Text = "○ 未连接";
             lblConn.SetBounds(12, 46, 400, 20);
@@ -281,11 +340,12 @@ namespace MusynxTool
             txtLog.ScrollBars = ScrollBars.Vertical;
             txtLog.BackColor = Color.White;
 
-            Controls.AddRange(new Control[] { lblGame, txtGame, btnBrowse, btnInstall, lblConn,
+            Controls.AddRange(new Control[] { lblGame, txtGame, btnBrowse, btnInstall, btnRemove, lblConn,
                 btnPrepare, btnRefresh, btnPlay, lblKeys, cbKeys, lblDiff, cbDiff, txtSearch, bar, lblState, lv, txtLog });
 
             btnBrowse.Click += delegate { Browse(); };
             btnInstall.Click += delegate { Install(); };
+            btnRemove.Click += delegate { Uninstall(); };
             btnPrepare.Click += delegate { Prepare(); };
             btnRefresh.Click += delegate { RefreshSongs(); };
             btnPlay.Click += delegate { Play(); };
@@ -358,6 +418,22 @@ namespace MusynxTool
                 dlg.Description = "选择 MUSYNX 游戏目录（包含 MUSYNX.exe）";
                 if (Directory.Exists(txtGame.Text)) dlg.SelectedPath = txtGame.Text;
                 if (dlg.ShowDialog(this) == DialogResult.OK) txtGame.Text = dlg.SelectedPath;
+            }
+        }
+
+        void Uninstall()
+        {
+            if (MessageBox.Show(this, "确定要从游戏目录移除加载器和插件吗？", "卸载", MessageBoxButtons.OKCancel, MessageBoxIcon.Warning) != DialogResult.OK) return;
+            try
+            {
+                string msg = Installer.Remove(txtGame.Text.Trim());
+                Log(msg);
+                MessageBox.Show(this, msg, "卸载", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception e)
+            {
+                Log("卸载失败：" + e.Message);
+                MessageBox.Show(this, e.Message, "卸载失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -686,8 +762,35 @@ namespace MusynxTool
     static class Program
     {
         [STAThread]
-        static void Main()
+        static void Main(string[] args)
         {
+            if (args.Length >= 1 && args[0] == "--remove")
+            {
+                try
+                {
+                    string msg = Installer.Remove(args.Length >= 2 ? args[1] : "");
+                    File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "install-result.txt"), msg);
+                }
+                catch (Exception e)
+                {
+                    File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "install-result.txt"), "ERROR " + e);
+                }
+                return;
+            }
+            if (args.Length >= 1 && args[0] == "--install")
+            {
+                try
+                {
+                    string dir = args.Length >= 2 ? args[1] : "";
+                    string msg = Installer.Ensure(dir);
+                    File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "install-result.txt"), msg);
+                }
+                catch (Exception e)
+                {
+                    File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "install-result.txt"), "ERROR " + e);
+                }
+                return;
+            }
             try
             {
                 Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
