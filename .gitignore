@@ -25,3 +25,5 @@ dist/*.log
 
 # release 产物
 dist/*.zip
+
+dist/install-result.txt
