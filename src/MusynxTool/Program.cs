@@ -322,7 +322,7 @@ namespace MusynxTool
             FormClosing += delegate { SaveSettings(); };
 
             timer.Interval = 500;
-            timer.Tick += delegate { Tick(); };
+            timer.Tick += delegate { PollState(); };
             timer.Start();
         }
 
@@ -407,22 +407,60 @@ namespace MusynxTool
             return resp.IndexOf("\"pong\"", StringComparison.Ordinal) >= 0;
         }
 
+        bool busy;
+        bool stateBusy;
+
+        void SetBusy(bool value, string label)
+        {
+            busy = value;
+            btnPlay.Enabled = !value && lv.Items.Count > 0;
+            if (label != null) lblState.Text = label;
+        }
+
+        void RunAsync(Func<string> work, Action<string> done)
+        {
+            if (busy) return;
+            SetBusy(true, "处理中…");
+            System.Threading.ThreadPool.QueueUserWorkItem(delegate(object state)
+            {
+                string result;
+                try { result = work(); }
+                catch (Exception e) { result = "{\"ok\":false,\"error\":" + Json.Q(e.Message) + "}"; }
+                try
+                {
+                    BeginInvoke((Action)delegate
+                    {
+                        SetBusy(false, null);
+                        done(result);
+                    });
+                }
+                catch (Exception) { }
+            });
+        }
+
         void Prepare()
         {
-            string resp = Rpc.Call("{\"cmd\":\"prepare\"}", 3000);
-            var o = Json.AsObj(Json.Parse(resp));
-            if (o != null && Json.B(o.ContainsKey("ok") ? o["ok"] : null))
+            RunAsync(delegate
             {
-                Log("已请求进入选歌");
+                string r = Rpc.Call("{\"cmd\":\"prepare\"}", 3000);
+                var o = Json.AsObj(Json.Parse(r));
+                if (o == null || !Json.B(o.ContainsKey("ok") ? o["ok"] : null)) return r;
                 for (int i = 0; i < 20; i++)
                 {
                     System.Threading.Thread.Sleep(400);
-                    Application.DoEvents();
                     if (SceneIsSelect()) break;
                 }
-                RefreshSongs();
-            }
-            else Log("进入选歌失败：" + ErrorOf(o));
+                return "{\"ok\":true,\"data\":\"ready\"}";
+            }, delegate(string resp)
+            {
+                var o = Json.AsObj(Json.Parse(resp));
+                if (o != null && Json.B(o.ContainsKey("ok") ? o["ok"] : null))
+                {
+                    Log("已请求进入选歌");
+                    RefreshSongs();
+                }
+                else Log("进入选歌失败：" + ErrorOf(o));
+            });
         }
 
         string ErrorOf(Dictionary<string, object> o)
@@ -433,7 +471,7 @@ namespace MusynxTool
 
         bool SceneIsSelect()
         {
-            string resp = Rpc.Call("{\"cmd\":\"state\"}", 800);
+            string resp = Rpc.Call("{\"cmd\":\"state\"}", 1200);
             var o = Json.AsObj(Json.Parse(resp));
             if (o == null || !o.ContainsKey("data")) return false;
             var d = Json.AsObj(o["data"]);
@@ -443,7 +481,12 @@ namespace MusynxTool
 
         void RefreshSongs()
         {
-            string resp = Rpc.Call("{\"cmd\":\"songs\"}", 6000);
+            RunAsync(delegate { return Rpc.Call("{\"cmd\":\"songs\"}", 8000); },
+                     delegate(string resp) { ApplySongs(resp); });
+        }
+
+        void ApplySongs(string resp)
+        {
             var o = Json.AsObj(Json.Parse(resp));
             if (o == null || !Json.B(o.ContainsKey("ok") ? o["ok"] : null))
             {
@@ -458,16 +501,16 @@ namespace MusynxTool
                 {
                     var d = Json.AsObj(it);
                     if (d == null) continue;
-                    var s = new Song();
-                    s.Id = Json.S(d["id"]);
-                    s.Name = Json.S(d["name"]);
-                    s.Bms = Json.S(d["bms"]);
-                    s.Hard = Json.S(d["hard"]);
-                    s.Scene = Json.S(d["scene"]);
-                    s.Keys = Json.I(d["keys"]);
-                    s.Level = Json.I(d["level"]);
-                    s.Sync = Json.I(d["sync"]);
-                    songs.Add(s);
+                    var song = new Song();
+                    song.Id = Json.S(d["id"]);
+                    song.Name = Json.S(d["name"]);
+                    song.Bms = Json.S(d["bms"]);
+                    song.Hard = Json.S(d["hard"]);
+                    song.Scene = Json.S(d["scene"]);
+                    song.Keys = Json.I(d["keys"]);
+                    song.Level = Json.I(d["level"]);
+                    song.Sync = Json.I(d["sync"]);
+                    songs.Add(song);
                 }
             }
             FillList();
@@ -549,37 +592,56 @@ namespace MusynxTool
             var song = lv.SelectedItems[0].Tag as Song;
             if (song == null) return;
 
-            if (!SceneIsSelect())
-            {
-                Log("当前不在选歌界面，正在进入…");
-                Rpc.Call("{\"cmd\":\"prepare\"}", 3000);
-                bool ok = false;
-                for (int i = 0; i < 20; i++)
-                {
-                    System.Threading.Thread.Sleep(400);
-                    Application.DoEvents();
-                    if (SceneIsSelect()) { ok = true; break; }
-                }
-                if (!ok) { Log("无法进入选歌界面"); return; }
-            }
-
             string req = "{\"cmd\":\"play\",\"bms\":" + Json.Q(song.Bms) +
                          ",\"hard\":" + Json.Q(song.Hard) +
                          ",\"keys\":" + song.Keys + ",\"ratio\":1.0}";
-            string resp = Rpc.Call(req, 8000);
-            var o = Json.AsObj(Json.Parse(resp));
-            if (o != null && Json.B(o.ContainsKey("ok") ? o["ok"] : null))
+
+            RunAsync(delegate
             {
-                lastResult = "";
-                btnPlay.Enabled = false;
-                Log("开始：" + song.Name + "（" + song.Keys + "K " + HardName(song.Hard) + "）");
-            }
-            else Log("开始失败：" + ErrorOf(o));
+                if (!SceneIsSelect())
+                {
+                    Rpc.Call("{\"cmd\":\"prepare\"}", 3000);
+                    for (int i = 0; i < 20; i++)
+                    {
+                        System.Threading.Thread.Sleep(400);
+                        if (SceneIsSelect()) break;
+                    }
+                }
+                if (!SceneIsSelect()) return "{\"ok\":false,\"error\":\"无法进入选歌界面\"}";
+                return Rpc.Call(req, 8000);
+            }, delegate(string resp)
+            {
+                var o = Json.AsObj(Json.Parse(resp));
+                if (o != null && Json.B(o.ContainsKey("ok") ? o["ok"] : null))
+                {
+                    lastResult = "";
+                    Log("开始：" + song.Name + "（" + song.Keys + "K " + HardName(song.Hard) + "）");
+                }
+                else Log("开始失败：" + ErrorOf(o));
+            });
         }
 
-        void Tick()
+        void PollState()
         {
-            string resp = Rpc.Call("{\"cmd\":\"state\"}", 900);
+            if (stateBusy) return;
+            stateBusy = true;
+            System.Threading.ThreadPool.QueueUserWorkItem(delegate(object state)
+            {
+                string resp = Rpc.Call("{\"cmd\":\"state\"}", 1500);
+                try
+                {
+                    BeginInvoke((Action)delegate
+                    {
+                        stateBusy = false;
+                        ApplyState(resp);
+                    });
+                }
+                catch (Exception) { stateBusy = false; }
+            });
+        }
+
+        void ApplyState(string resp)
+        {
             var o = Json.AsObj(Json.Parse(resp));
             if (o == null || !Json.B(o.ContainsKey("ok") ? o["ok"] : null))
             {
@@ -621,8 +683,7 @@ namespace MusynxTool
             else
             {
                 lblState.Text = scene;
-                if (scene != null && scene.IndexOf("Settlement", StringComparison.Ordinal) >= 0)
-                    btnPlay.Enabled = lv.Items.Count > 0;
+                btnPlay.Enabled = !busy && lv.Items.Count > 0;
             }
 
             object resultObj = d.ContainsKey("result") ? d["result"] : null;
@@ -636,7 +697,6 @@ namespace MusynxTool
                     Log("结算：" + Json.S(r["title"]) + "  " + (Json.I(r["sync"]) / 100.0).ToString("0.00") +
                         "%  EX " + Json.I(r["ex"]) + " / MISS " + Json.I(r["miss"]) + " / COMBO " + Json.I(r["combo"]));
                     bar.Value = 0;
-                    btnPlay.Enabled = true;
                     needRefresh = true;
                     if (scene != null && scene.IndexOf("SelectSong", StringComparison.Ordinal) >= 0)
                     {
